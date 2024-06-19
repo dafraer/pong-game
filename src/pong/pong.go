@@ -1,123 +1,157 @@
 package pong
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/eiannone/keyboard"
-	"github.com/gosuri/uilive"
-	"log"
+	tea "github.com/charmbracelet/bubbletea"
 	"time"
 )
 
-func RefreshScreen(batPosition int, ballPosition Position, s Screen, writer *uilive.Writer) error {
-	var buffer bytes.Buffer
-	s[batPosition][1] = '['
-	s[batPosition+1][1] = '['
-	s[ballPosition.Y][ballPosition.X] = '*'
-	for i := 0; i < 20; i++ {
-		for j := 0; j < 71; j++ {
-			if _, err := fmt.Fprintf(&buffer, "%s", string(s[i][j])); err != nil {
-				return err
+type TickMsg time.Time
+
+func doTick() tea.Cmd {
+	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+		return TickMsg(t)
+	})
+}
+
+func (g Game) Init() tea.Cmd {
+	// Just return `nil`, which means "no I/O right now, please."
+	return doTick()
+}
+
+func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch g.State {
+	case PlayAI:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+
+			case "ctrl+c":
+				return g, tea.Quit
+			case "esc":
+				g = *NewGame()
+			case "w":
+				g.Bats[0].changeBatPosition(-1)
+			case "s":
+				g.Bats[0].changeBatPosition(1)
+			case "k":
+				g.Bats[1].changeBatPosition(-1)
+			case "m":
+				g.Bats[1].changeBatPosition(1)
+			}
+		case TickMsg:
+			g.changeBallPosition(g.Bats)
+			return g, doTick()
+		}
+		g.changeBallPosition(g.Bats)
+	case Menu:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+
+			case "ctrl+c":
+				return g, tea.Quit
+
+			case "q":
+				g.State = PlayAI
+			case "w":
+				g.State = Multiplayer
+			case "e":
+				g.State = CreateRoom
+			case "r":
+				g.State = JoinRoom
 			}
 		}
-		if _, err := fmt.Fprintf(&buffer, "\n"); err != nil {
-			return err
-		}
-	}
-	fmt.Fprintf(writer, buffer.String())
+	case GameOver:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
 
-	time.Sleep(time.Millisecond * 20)
+			case "ctrl+c":
+				return g, tea.Quit
+
+			case "a":
+				//TODO change this
+				g = *NewGame()
+				g.State = PlayAI
+			case "esc":
+				g = *NewGame()
+				g.State = Menu
+			}
+		}
+	default:
+		panic("Error, No game state, or game state hasnt been added yet")
+	}
+	return g, nil
+}
+
+func (g Game) View() string {
+	switch g.State {
+	case PlayAI:
+		g.RefreshScreen()
+	case Menu:
+		return g.State
+	case GameOver:
+		return fmt.Sprintf(g.State, g.Score[0])
+	default:
+		panic("Error, No game state, or game state hasnt been added yet")
+	}
+	// Send the UI for rendering
+	return g.Screen.String()
+}
+
+func (g *Game) RefreshScreen() error {
+	g.Screen[g.Bats[0].position][1] = '['
+	g.Screen[g.Bats[0].position+1][1] = '['
+	g.Screen[g.Bats[1].position][69] = ']'
+	g.Screen[g.Bats[1].position+1][69] = ']'
+	g.Screen[g.Ball.position.Y][g.Ball.position.X] = '*'
 	return nil
 }
 
-func NewGame() *Game {
-	return &Game{
-		Bat:  Bat{10},
-		Ball: NewBall(),
-	}
-}
-
-func (g *Game) Run() {
-	s := NewScreen()
-	writer := uilive.New()
-	writer.Start()
-	if err := keyboard.Open(); err != nil {
-		panic(err)
-	}
-	defer func() {
-		_ = keyboard.Close()
-	}()
-	timer := make(chan struct{})
-	msg := make(chan string)
-	go analnayaProbka(timer)
-	go pressKey(msg)
-	for !gameOver {
-		g.Ball.changeBallPosition(g.Bat)
-		RefreshScreen(g.Bat.position, g.Ball.position, *s, writer)
-
-		select {
-		case s := <-msg:
-			switch {
-			case s == "w":
-				g.Bat.changeBatPosition(-1)
-			case s == "s":
-				g.Bat.changeBatPosition(1)
-			case s == "esc":
-				gameOver = true
-			}
-		case <-timer:
-			continue
-		}
-
-	}
-	writer.Stop()
-}
-
-func (b *Ball) changeBallPosition(bat Bat) {
-	if b.direction == Left {
+func (g *Game) changeBallPosition(bats [2]Bat) {
+	if g.Ball.direction == Left {
 		switch {
-		case b.position.Y == 1:
-			b.slope = 1
-			b.position.X--
-			b.position.Y += b.slope
-		case b.position.Y == 18:
-			b.slope = -1
-			b.position.X--
-			b.position.Y += b.slope
-		case b.position.X == 2 && (b.position.Y == bat.position || b.position.Y == bat.position+1 || b.position.Y == bat.position+2 || b.position.Y == bat.position-1):
-			b.direction = Right
-			b.slope = changeSlope()
-			b.position.X++
-			b.position.Y += b.slope
-		case b.position.X == 1:
-			gameOver = true
+		case g.Ball.position.Y == 1:
+			g.Ball.slope = 1
+			g.Ball.position.X--
+			g.Ball.position.Y += g.Ball.slope
+		case g.Ball.position.Y == 18:
+			g.Ball.slope = -1
+			g.Ball.position.X--
+			g.Ball.position.Y += g.Ball.slope
+		case g.Ball.position.X == 2 && (g.Ball.position.Y == bats[0].position || g.Ball.position.Y == bats[0].position+1 || g.Ball.position.Y == bats[0].position+2 || g.Ball.position.Y == bats[0].position-1):
+			g.Score[0]++
+			g.Ball.direction = Right
+			g.Ball.slope = changeSlope()
+			g.Ball.position.X++
+			g.Ball.position.Y += g.Ball.slope
+		case g.Ball.position.X == 1:
+			g.State = GameOver
 		default:
-			b.position.X--
-			b.position.Y += b.slope
+			g.Ball.position.X--
+			g.Ball.position.Y += g.Ball.slope
 		}
 	} else {
 		switch {
-		case b.position.Y == 1:
-			b.slope = 1
-			b.position.X++
-			b.position.Y += b.slope
-		case b.position.Y == 18:
-			b.slope = -1
-			b.position.X++
-			b.position.Y += b.slope
-		case b.position.X == 68 && (b.position.Y == bat.position || b.position.Y == bat.position+1 || b.position.Y == bat.position+2 || b.position.Y == bat.position-1):
-			b.direction = Left
-			b.slope = changeSlope()
-			b.position.X--
-			b.position.Y += b.slope
-		case b.position.X == 69:
-			b.direction = Left
-			b.slope = changeSlope()
-			b.position.X--
-			b.position.Y += b.slope
+		case g.Ball.position.Y == 1:
+			g.Ball.slope = 1
+			g.Ball.position.X++
+			g.Ball.position.Y += g.Ball.slope
+		case g.Ball.position.Y == 18:
+			g.Ball.slope = -1
+			g.Ball.position.X++
+			g.Ball.position.Y += g.Ball.slope
+		case g.Ball.position.X == 68 && (g.Ball.position.Y == bats[1].position || g.Ball.position.Y == bats[1].position+1 || g.Ball.position.Y == bats[1].position+2 || g.Ball.position.Y == bats[1].position-1):
+			g.Ball.direction = Left
+			g.Ball.slope = changeSlope()
+			g.Ball.position.X--
+			g.Ball.position.Y += g.Ball.slope
+		case g.Ball.position.X == 69:
+			g.State = GameOver
 		default:
-			b.position.X++
-			b.position.Y += b.slope
+			g.Ball.position.X++
+			g.Ball.position.Y += g.Ball.slope
 		}
 	}
 }
@@ -125,31 +159,5 @@ func (b *Ball) changeBallPosition(bat Bat) {
 func (b *Bat) changeBatPosition(amount int) {
 	if b.position+amount > 0 && b.position+amount < 18 {
 		b.position += amount
-	}
-}
-
-func analnayaProbka(timer chan struct{}) {
-	for {
-		time.Sleep(50 * time.Millisecond)
-		timer <- struct{}{}
-	}
-
-}
-
-func pressKey(msg chan string) {
-	for {
-		char, key, err := keyboard.GetKey()
-		if err != nil {
-			log.Println("ERROR HERE", err)
-			panic(err)
-		}
-		switch {
-		case char == 'w':
-			msg <- "w"
-		case char == 's':
-			msg <- "s"
-		case key == keyboard.KeyEsc:
-			msg <- "esc"
-		}
 	}
 }
