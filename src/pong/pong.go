@@ -9,13 +9,12 @@ import (
 type TickMsg time.Time
 
 func doTick() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
 }
 
 func (g Game) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
 	return doTick()
 }
 
