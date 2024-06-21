@@ -9,7 +9,7 @@ import (
 type TickMsg time.Time
 
 func doTick() tea.Cmd {
-	return tea.Tick(time.Millisecond*50, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Millisecond*30, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
 }
@@ -42,7 +42,6 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			g.changeBallPosition(g.Bats)
 			return g, doTick()
 		}
-		g.changeBallPosition(g.Bats)
 	case Menu:
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
@@ -60,6 +59,8 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "r":
 				g.State = JoinRoom
 			}
+		case TickMsg:
+			return g, doTick()
 		}
 	case GameOver:
 		switch msg := msg.(type) {
@@ -77,6 +78,8 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				g = *NewGame()
 				g.State = Menu
 			}
+		case TickMsg:
+			return g, doTick()
 		}
 	default:
 		panic("Error, No game state, or game state hasnt been added yet")
@@ -112,14 +115,17 @@ func (g *Game) changeBallPosition(bats [2]Bat) {
 	if g.Ball.direction == Left {
 		switch {
 		case g.Ball.position.Y == 1:
+			fmt.Print("\a")
 			g.Ball.slope = 1
 			g.Ball.position.X--
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.Y == 18:
+			fmt.Print("\a")
 			g.Ball.slope = -1
 			g.Ball.position.X--
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.X == 2 && (g.Ball.position.Y == bats[0].position || g.Ball.position.Y == bats[0].position+1 || g.Ball.position.Y == bats[0].position+2 || g.Ball.position.Y == bats[0].position-1):
+			fmt.Print("\a")
 			g.Score[0]++
 			g.Ball.direction = Right
 			g.Ball.slope = changeSlope()
@@ -134,14 +140,18 @@ func (g *Game) changeBallPosition(bats [2]Bat) {
 	} else {
 		switch {
 		case g.Ball.position.Y == 1:
+			fmt.Print("\a")
 			g.Ball.slope = 1
 			g.Ball.position.X++
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.Y == 18:
+			fmt.Print("\a")
 			g.Ball.slope = -1
 			g.Ball.position.X++
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.X == 68 && (g.Ball.position.Y == bats[1].position || g.Ball.position.Y == bats[1].position+1 || g.Ball.position.Y == bats[1].position+2 || g.Ball.position.Y == bats[1].position-1):
+			fmt.Print("\a")
+			g.Score[1]++
 			g.Ball.direction = Left
 			g.Ball.slope = changeSlope()
 			g.Ball.position.X--
