@@ -8,34 +8,37 @@ import (
 
 type TickMsg time.Time
 
+// doTick defines refresh rate
 func doTick() tea.Cmd {
 	return tea.Tick(time.Millisecond*30, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
 }
 
-func (g Game) Init() tea.Cmd {
+// Init initialises game model
+func (g game) Init() tea.Cmd {
 	return doTick()
 }
 
-func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch g.State {
+// Update updates game struct
+func (g game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch g.state {
 	case PlayAI:
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
 			case "esc":
-				g = *NewGame()
+				g = NewGame()
 			case "w":
-				g.Bats[1].changeBatPosition(g.calculateAIBatDirection())
-				g.Bats[0].changeBatPosition(-1)
+				g.bats[1].changeBatPosition(g.calculateAIBatDirection())
+				g.bats[0].changeBatPosition(-1)
 			case "s":
-				g.Bats[1].changeBatPosition(g.calculateAIBatDirection())
-				g.Bats[0].changeBatPosition(1)
+				g.bats[1].changeBatPosition(g.calculateAIBatDirection())
+				g.bats[0].changeBatPosition(1)
 			}
 		case TickMsg:
-			g.Bats[1].changeBatPosition(g.calculateAIBatDirection())
-			g.changeBallPosition(g.Bats)
+			g.bats[1].changeBatPosition(g.calculateAIBatDirection())
+			g.changeBallPosition()
 			return g, doTick()
 		}
 	case Menu:
@@ -47,9 +50,7 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return g, tea.Quit
 
 			case "q":
-				g.State = PlayAI
-			case "w":
-				g.State = Multiplayer
+				g.state = PlayAI
 			}
 		case TickMsg:
 			return g, doTick()
@@ -59,47 +60,33 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			switch msg.String() {
 			case "a":
-				//TODO change this
-				g = *NewGame()
-				g.State = PlayAI
+				g = NewGame()
+				g.state = PlayAI
 			case "esc":
-				g = *NewGame()
-				g.State = Menu
+				g = NewGame()
+				g.state = Menu
 			}
 		case TickMsg:
 			return g, doTick()
 		}
 	case Multiplayer:
-		switch msg := msg.(type) {
-		case tea.KeyMsg:
-			switch msg.String() {
-			case "esc":
-				g = *NewGame()
-			case "w":
-				g = Request(Message{"w", User})
-			case "s":
-				Request(Message{"s", User})
-			}
-		case TickMsg:
-			g = Get()
-			return g, doTick()
-		}
-	default:
-		panic("Error, No game state, or game state hasnt been added yet")
+		//TODO Add multiplayer
+
 	}
 	return g, nil
 }
 
-func (g Game) View() string {
-	switch g.State {
+// View outputs game screen to the terminal
+func (g game) View() string {
+	switch g.state {
 	case PlayAI:
-		g.RefreshScreen()
+		g.refreshScreen()
 	case Menu:
-		return g.State
+		return g.state
 	case GameOver:
-		return fmt.Sprintf(g.State, g.Score[0], g.Score[1])
+		return fmt.Sprintf(g.state, g.score[0], g.score[1])
 	case Multiplayer:
-		g.RefreshScreen()
+		g.refreshScreen()
 	default:
 		panic("Error, No game state, or game state hasnt been added yet")
 	}
@@ -107,94 +94,104 @@ func (g Game) View() string {
 	return g.String()
 }
 
-func (g *Game) RefreshScreen() error {
-	g.Screen[g.Bats[0].position][1] = '['
-	g.Screen[g.Bats[0].position+1][1] = '['
-	g.Screen[g.Bats[1].position][69] = ']'
-	g.Screen[g.Bats[1].position+1][69] = ']'
-	g.Screen[g.Ball.position.Y][g.Ball.position.X] = '*'
-	return nil
+// RefreshScreen updates screen based on the game struct
+func (g *game) refreshScreen() {
+	g.screen[g.bats[0].position][1] = '['
+	g.screen[g.bats[0].position+1][1] = '['
+	g.screen[g.bats[1].position][69] = ']'
+	g.screen[g.bats[1].position+1][69] = ']'
+	g.screen[g.ball.position.Y][g.ball.position.X] = '*'
 }
 
-func (g *Game) changeBallPosition(bats [2]Bat) {
-	if g.Ball.direction == Left {
+func (g *game) changeBallPosition() {
+	if g.ball.direction == Left {
 		switch {
-		case g.Ball.position.Y == 1:
+		case g.ball.position.Y == 1:
+			//If the ball hits upper border it changes direction
 			fmt.Print("\a")
-			g.Ball.slope = 1
-			g.Ball.position.X--
-			g.Ball.position.Y += g.Ball.slope
-		case g.Ball.position.Y == 18:
+			g.ball.slope = 1
+			g.ball.position.X--
+			g.ball.position.Y += g.ball.slope
+		case g.ball.position.Y == 18:
+			//If the ball hits lower border it changes direction
 			fmt.Print("\a")
-			g.Ball.slope = -1
-			g.Ball.position.X--
-			g.Ball.position.Y += g.Ball.slope
-		case g.Ball.position.X == 2 && (g.Ball.position.Y == bats[0].position || g.Ball.position.Y == bats[0].position+1 || g.Ball.position.Y == bats[0].position+2 || g.Ball.position.Y == bats[0].position-1):
+			g.ball.slope = -1
+			g.ball.position.X--
+			g.ball.position.Y += g.ball.slope
+		case g.ball.position.X == 2 && (g.ball.position.Y == g.bats[0].position || g.ball.position.Y == g.bats[0].position+1 || (g.ball.position.Y == g.bats[0].position+2 && g.ball.slope == -1) || (g.ball.position.Y == g.bats[0].position-1 && g.ball.slope == 1)):
+			//If the ball hits the bat directly or on the corner, ball is reflected
 			fmt.Print("\a")
-			g.Ball.direction = Right
-			g.Ball.slope = changeSlope()
-			g.Ball.position.X++
-			g.Ball.position.Y += g.Ball.slope
-		case g.Ball.position.X == 1:
-			g.Score[1]++
-			g.Ball = NewBall()
-			g.Bats = [2]Bat{Bat{10}, Bat{10}}
-			if g.Score[1] >= MaxScore {
-				g.State = GameOver
+			g.ball.direction = Right
+			g.ball.slope = changeSlope()
+			g.ball.position.X++
+			g.ball.position.Y += g.ball.slope
+		case g.ball.position.X == 1:
+			//If the ball hits the wall score is increased by 1
+			g.score[1]++
+			g.ball = NewBall()
+			g.bats = [2]bat{bat{10}, bat{10}}
+			if g.score[1] >= MaxScore {
+				g.state = GameOver
 			}
 		default:
-			g.Ball.position.X--
-			g.Ball.position.Y += g.Ball.slope
+			//Just move the ball
+			g.ball.position.X--
+			g.ball.position.Y += g.ball.slope
 		}
 	} else {
 		switch {
-		case g.Ball.position.Y == 1:
+		case g.ball.position.Y == 1:
+			//If the ball hits upper border it changes direction
 			fmt.Print("\a")
-			g.Ball.slope = 1
-			g.Ball.position.X++
-			g.Ball.position.Y += g.Ball.slope
-		case g.Ball.position.Y == 18:
+			g.ball.slope = 1
+			g.ball.position.X++
+			g.ball.position.Y += g.ball.slope
+		case g.ball.position.Y == 18:
+			//If the ball hits lower border it changes direction
 			fmt.Print("\a")
-			g.Ball.slope = -1
-			g.Ball.position.X++
-			g.Ball.position.Y += g.Ball.slope
-		case g.Ball.position.X == 68 && (g.Ball.position.Y == bats[1].position || g.Ball.position.Y == bats[1].position+1 || g.Ball.position.Y == bats[1].position+2 || g.Ball.position.Y == bats[1].position-1):
+			g.ball.slope = -1
+			g.ball.position.X++
+			g.ball.position.Y += g.ball.slope
+		case g.ball.position.X == 68 && (g.ball.position.Y == g.bats[1].position || g.ball.position.Y == g.bats[1].position+1 || (g.ball.position.Y == g.bats[1].position+2 && g.ball.slope == -1) || (g.ball.position.Y == g.bats[1].position-1 && g.ball.slope == 1)):
+			//If the ball hits the bat directly or on the corner, ball is reflected
 			fmt.Print("\a")
-			g.Ball.direction = Left
-			g.Ball.slope = changeSlope()
-			g.Ball.position.X--
-			g.Ball.position.Y += g.Ball.slope
-		case g.Ball.position.X == 69:
-			g.Score[0]++
-			g.Ball = NewBall()
-			g.Bats = [2]Bat{Bat{10}, Bat{10}}
-			if g.Score[0] >= MaxScore {
-				g.State = GameOver
+			g.ball.direction = Left
+			g.ball.slope = changeSlope()
+			g.ball.position.X--
+			g.ball.position.Y += g.ball.slope
+		case g.ball.position.X == 69:
+			//If the ball hits the wall score is increased by 1
+			g.score[0]++
+			g.ball = NewBall()
+			g.bats = [2]bat{bat{10}, bat{10}}
+			if g.score[0] >= MaxScore {
+				g.state = GameOver
 			}
 		default:
-			g.Ball.position.X++
-			g.Ball.position.Y += g.Ball.slope
+			//Just move the ball
+			g.ball.position.X++
+			g.ball.position.Y += g.ball.slope
 		}
 	}
 }
 
-func (b *Bat) changeBatPosition(amount int) {
+func (b *bat) changeBatPosition(amount int) {
 	if b.position+amount > 0 && b.position+amount < 18 {
 		b.position += amount
 	}
 }
 
-func (g Game) calculateAIBatDirection() int {
-	if g.Ball.direction == Left || g.Ball.position.X < 60 {
+func (g *game) calculateAIBatDirection() int {
+	//If ball flies in the opposite direction, or it is far away, or the bat is at the same Y coordinate with the ball - do nothing
+	if g.ball.direction == Left || g.ball.position.X < 60 || g.bats[1].position == g.ball.position.Y {
 		return 0
 	}
-	if g.Bats[1].position == g.Ball.position.Y {
-		return 0
-	}
-	if g.Bats[1].position > g.Ball.position.Y {
+	//If the bat is too low for the ball, move it up
+	if g.bats[1].position > g.ball.position.Y {
 		return -1
 	}
-	if g.Bats[1].position < g.Ball.position.Y {
+	//If the bat is too high for the ball, move down
+	if g.bats[1].position < g.ball.position.Y {
 		return 1
 	}
 	return 0
