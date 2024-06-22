@@ -3,6 +3,7 @@ package pong
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
+	"pong/src/udpclient"
 	"time"
 )
 
@@ -24,21 +25,17 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
-
-			case "ctrl+c":
-				return g, tea.Quit
 			case "esc":
 				g = *NewGame()
 			case "w":
+				g.Bats[1].changeBatPosition(g.calculateAIBatDirection())
 				g.Bats[0].changeBatPosition(-1)
 			case "s":
+				g.Bats[1].changeBatPosition(g.calculateAIBatDirection())
 				g.Bats[0].changeBatPosition(1)
-			case "k":
-				g.Bats[1].changeBatPosition(-1)
-			case "m":
-				g.Bats[1].changeBatPosition(1)
 			}
 		case TickMsg:
+			g.Bats[1].changeBatPosition(g.calculateAIBatDirection())
 			g.changeBallPosition(g.Bats)
 			return g, doTick()
 		}
@@ -47,17 +44,13 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyMsg:
 			switch msg.String() {
 
-			case "ctrl+c":
+			case "esc":
 				return g, tea.Quit
 
 			case "q":
 				g.State = PlayAI
 			case "w":
 				g.State = Multiplayer
-			case "e":
-				g.State = CreateRoom
-			case "r":
-				g.State = JoinRoom
 			}
 		case TickMsg:
 			return g, doTick()
@@ -66,10 +59,6 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg := msg.(type) {
 		case tea.KeyMsg:
 			switch msg.String() {
-
-			case "ctrl+c":
-				return g, tea.Quit
-
 			case "a":
 				//TODO change this
 				g = *NewGame()
@@ -79,6 +68,21 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				g.State = Menu
 			}
 		case TickMsg:
+			return g, doTick()
+		}
+	case Multiplayer:
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc":
+				g = *NewGame()
+			case "w":
+				g = udpclient.Request(udpclient.Message{"w", User})
+			case "s":
+				udpclient.Request(udpclient.Message{"s", User})
+			}
+		case TickMsg:
+			g = udpclient.Get()
 			return g, doTick()
 		}
 	default:
@@ -94,12 +98,14 @@ func (g Game) View() string {
 	case Menu:
 		return g.State
 	case GameOver:
-		return fmt.Sprintf(g.State, g.Score[0])
+		return fmt.Sprintf(g.State, g.Score[0], g.Score[1])
+	case Multiplayer:
+		g.RefreshScreen()
 	default:
 		panic("Error, No game state, or game state hasnt been added yet")
 	}
 	// Send the UI for rendering
-	return g.Screen.String()
+	return g.String()
 }
 
 func (g *Game) RefreshScreen() error {
@@ -126,13 +132,17 @@ func (g *Game) changeBallPosition(bats [2]Bat) {
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.X == 2 && (g.Ball.position.Y == bats[0].position || g.Ball.position.Y == bats[0].position+1 || g.Ball.position.Y == bats[0].position+2 || g.Ball.position.Y == bats[0].position-1):
 			fmt.Print("\a")
-			g.Score[0]++
 			g.Ball.direction = Right
 			g.Ball.slope = changeSlope()
 			g.Ball.position.X++
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.X == 1:
-			g.State = GameOver
+			g.Score[1]++
+			g.Ball = NewBall()
+			g.Bats = [2]Bat{Bat{10}, Bat{10}}
+			if g.Score[1] >= MaxScore {
+				g.State = GameOver
+			}
 		default:
 			g.Ball.position.X--
 			g.Ball.position.Y += g.Ball.slope
@@ -151,13 +161,17 @@ func (g *Game) changeBallPosition(bats [2]Bat) {
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.X == 68 && (g.Ball.position.Y == bats[1].position || g.Ball.position.Y == bats[1].position+1 || g.Ball.position.Y == bats[1].position+2 || g.Ball.position.Y == bats[1].position-1):
 			fmt.Print("\a")
-			g.Score[1]++
 			g.Ball.direction = Left
 			g.Ball.slope = changeSlope()
 			g.Ball.position.X--
 			g.Ball.position.Y += g.Ball.slope
 		case g.Ball.position.X == 69:
-			g.State = GameOver
+			g.Score[0]++
+			g.Ball = NewBall()
+			g.Bats = [2]Bat{Bat{10}, Bat{10}}
+			if g.Score[0] >= MaxScore {
+				g.State = GameOver
+			}
 		default:
 			g.Ball.position.X++
 			g.Ball.position.Y += g.Ball.slope
@@ -169,4 +183,20 @@ func (b *Bat) changeBatPosition(amount int) {
 	if b.position+amount > 0 && b.position+amount < 18 {
 		b.position += amount
 	}
+}
+
+func (g Game) calculateAIBatDirection() int {
+	if g.Ball.direction == Left || g.Ball.position.X < 60 {
+		return 0
+	}
+	if g.Bats[1].position == g.Ball.position.Y {
+		return 0
+	}
+	if g.Bats[1].position > g.Ball.position.Y {
+		return -1
+	}
+	if g.Bats[1].position < g.Ball.position.Y {
+		return 1
+	}
+	return 0
 }
