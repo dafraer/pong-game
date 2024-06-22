@@ -3,7 +3,6 @@ package pong
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"pong/src/udpclient"
 	"time"
 )
 
@@ -77,12 +76,12 @@ func (g Game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "esc":
 				g = *NewGame()
 			case "w":
-				g = udpclient.Request(udpclient.Message{"w", User})
+				g = Request(Message{"w", User})
 			case "s":
-				udpclient.Request(udpclient.Message{"s", User})
+				Request(Message{"s", User})
 			}
 		case TickMsg:
-			g = udpclient.Get()
+			g = Get()
 			return g, doTick()
 		}
 	default:

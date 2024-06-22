@@ -1,4 +1,4 @@
-package udpclient
+package pong
 
 import (
 	"bufio"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"pong/src/pong"
 )
 
 type Message struct {
@@ -14,7 +13,7 @@ type Message struct {
 	User int
 }
 
-func Get() pong.Game {
+func Get() Game {
 	udpAddr, err := net.ResolveUDPAddr("udp", "8000")
 
 	if err != nil {
@@ -35,7 +34,7 @@ func Get() pong.Game {
 
 	// Read from the connection untill a new line is send
 	bufio.NewReader(conn).Read(buf)
-	g := pong.NewGame()
+	g := NewGame()
 	json.Unmarshal(buf, g)
 	if err != nil {
 		panic(err)
@@ -43,7 +42,7 @@ func Get() pong.Game {
 	return *g
 }
 
-func Request(msg Message) pong.Game {
+func Request(msg Message) Game {
 	udpAddr, err := net.ResolveUDPAddr("udp", "8000")
 
 	if err != nil {
@@ -68,7 +67,7 @@ func Request(msg Message) pong.Game {
 
 	// Read from the connection untill a new line is send
 	bufio.NewReader(conn).Read(buf)
-	g := pong.NewGame()
+	g := NewGame()
 	json.Unmarshal(buf, g)
 	if err != nil {
 		panic(err)
