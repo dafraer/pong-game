@@ -14,7 +14,7 @@ type Message struct {
 }
 
 func Get() Game {
-	udpAddr, err := net.ResolveUDPAddr("udp", "8000")
+	udpAddr, err := net.ResolveUDPAddr("udp", "http://localhost:8000/")
 
 	if err != nil {
 		fmt.Println(err)
