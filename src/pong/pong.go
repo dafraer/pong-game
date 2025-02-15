@@ -51,6 +51,8 @@ func (g game) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "q":
 				g.state = PlayAI
+			case "w":
+				g.state = Multiplayer
 			}
 		case TickMsg:
 			return g, doTick()
